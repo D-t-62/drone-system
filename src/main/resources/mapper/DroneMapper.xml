@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.dronesystem.mapper.DroneMapper">
+
+    <resultMap id="BaseResultMap" type="com.example.dronesystem.entity.Drone">
+        <id column="id" property="id"/>
+        <result column="serial_number" property="serialNumber"/>
+        <result column="model" property="model"/>
+        <result column="weight" property="weight"/>
+        <result column="max_height" property="maxHeight"/>
+        <result column="max_speed" property="maxSpeed"/>
+        <result column="battery_capacity" property="batteryCapacity"/>
+        <result column="status" property="status"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.example.dronesystem.entity.Drone">
+        INSERT INTO drone (serial_number, model, weight, max_height, max_speed, battery_capacity, status, create_time, update_time)
+        VALUES (#{serialNumber}, #{model}, #{weight}, #{maxHeight}, #{maxSpeed}, #{batteryCapacity}, #{status}, #{createTime}, #{updateTime})
+    </insert>
+
+    <update id="update" parameterType="com.example.dronesystem.entity.Drone">
+        UPDATE drone
+        SET serial_number = #{serialNumber},
+            model = #{model},
+            weight = #{weight},
+            max_height = #{maxHeight},
+            max_speed = #{maxSpeed},
+            battery_capacity = #{batteryCapacity},
+            status = #{status},
+            update_time = #{updateTime}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById" parameterType="java.lang.Long">
+        DELETE FROM drone WHERE id = #{id}
+    </delete>
+
+    <select id="selectById" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        SELECT * FROM drone WHERE id = #{id}
+    </select>
+
+    <select id="selectList" parameterType="com.example.dronesystem.entity.Drone" resultMap="BaseResultMap">
+        SELECT * FROM drone
+        <where>
+            <if test="drone.serialNumber != null and drone.serialNumber != ''">
+                AND serial_number LIKE CONCAT('%', #{drone.serialNumber}, '%')
+            </if>
+            <if test="drone.model != null and drone.model != ''">
+                AND model LIKE CONCAT('%', #{drone.model}, '%')
+            </if>
+            <if test="drone.status != null and drone.status != ''">
+                AND status = #{drone.status}
+            </if>
+        </where>
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="count" parameterType="com.example.dronesystem.entity.Drone" resultType="java.lang.Integer">
+        SELECT COUNT(*) FROM drone
+        <where>
+            <if test="drone.serialNumber != null and drone.serialNumber != ''">
+                AND serial_number LIKE CONCAT('%', #{drone.serialNumber}, '%')
+            </if>
+            <if test="drone.model != null and drone.model != ''">
+                AND model LIKE CONCAT('%', #{drone.model}, '%')
+            </if>
+            <if test="drone.status != null and drone.status != ''">
+                AND status = #{drone.status}
+            </if>
+        </where>
+    </select>
+</mapper>

@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>无人机管理系统</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css">
+    <style>
+        .status-active { color: green; }
+        .status-inactive { color: gray; }
+        .status-maintenance { color: orange; }
+    </style>
+</head>
+<body>
+    <div id="app" class="container mt-4">
+        <h2 class="mb-4">无人机管理系统</h2>
+        
+        <!-- 搜索区域 -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <form @submit.prevent="searchDrones">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <input type="text" v-model="searchForm.serialNumber" class="form-control" placeholder="序列号">
+                        </div>
+                        <div class="col-md-3">
+                            <input type="text" v-model="searchForm.model" class="form-control" placeholder="型号">
+                        </div>
+                        <div class="col-md-3">
+                            <select v-model="searchForm.status" class="form-control">
+                                <option value="">全部状态</option>
+                                <option value="ACTIVE">运行中</option>
+                                <option value="INACTIVE">未激活</option>
+                                <option value="MAINTENANCE">维护中</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <button type="submit" class="btn btn-primary">搜索</button>
+                            <button type="button" @click="resetSearch" class="btn btn-secondary ml-2">重置</button>
+                            <button type="button" @click="generateDrone" class="btn btn-info ml-2">AI生成</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- 数据表格 -->
+        <div class="card">
+            <div class="card-body">
+                <table class="table table-bordered table-striped">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>序列号</th>
+                            <th>型号</th>
+                            <th>重量(kg)</th>
+                            <th>最大高度(m)</th>
+                            <th>最大速度(km/h)</th>
+                            <th>电池容量(mAh)</th>
+                            <th>状态</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="drone in drones" :key="drone.id">
+                            <td>{{ drone.id }}</td>
+                            <td>{{ drone.serialNumber }}</td>
+                            <td>{{ drone.model }}</td>
+                            <td>{{ drone.weight }}</td>
+                            <td>{{ drone.maxHeight }}</td>
+                            <td>{{ drone.maxSpeed }}</td>
+                            <td>{{ drone.batteryCapacity }}</td>
+                            <td :class="getStatusClass(drone.status)">{{ getStatusText(drone.status) }}</td>
+                            <td>{{ formatTime(drone.createTime) }}</td>
+                            <td>
+                                <button @click="editDrone(drone)" class="btn btn-sm btn-warning">编辑</button>
+                                <button @click="deleteDrone(drone.id)" class="btn btn-sm btn-danger ml-1">删除</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 添加/编辑弹窗 -->
+        <div class="modal" :class="{ 'show': showModal, 'd-block': showModal }" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">{{ editForm.id ? '编辑无人机' : '添加无人机' }}</h5>
+                        <button type="button" @click="closeModal" class="close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <form @submit.prevent="saveDrone">
+                            <div class="form-group">
+                                <label>序列号</label>
+                                <input type="text" v-model="editForm.serialNumber" class="form-control" required>
+                            </div>
+                            <div class="form-group">
+                                <label>型号</label>
+                                <input type="text" v-model="editForm.model" class="form-control" required>
+                            </div>
+                            <div class="form-group">
+                                <label>重量(kg)</label>
+                                <input type="number" v-model="editForm.weight" class="form-control" step="0.1" required>
+                            </div>
+                            <div class="form-group">
+                                <label>最大高度(m)</label>
+                                <input type="number" v-model="editForm.maxHeight" class="form-control" required>
+                            </div>
+                            <div class="form-group">
+                                <label>最大速度(km/h)</label>
+                                <input type="number" v-model="editForm.maxSpeed" class="form-control" required>
+                            </div>
+                            <div class="form-group">
+                                <label>电池容量(mAh)</label>
+                                <input type="number" v-model="editForm.batteryCapacity" class="form-control" required>
+                            </div>
+                            <div class="form-group">
+                                <label>状态</label>
+                                <select v-model="editForm.status" class="form-control">
+                                    <option value="ACTIVE">运行中</option>
+                                    <option value="INACTIVE">未激活</option>
+                                    <option value="MAINTENANCE">维护中</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-primary">保存</button>
+                            <button type="button" @click="closeModal" class="btn btn-secondary ml-2">取消</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.2.33/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios@0.27.2/dist/axios.min.js"></script>
+    <script>
+        const { createApp } = Vue;
+        
+        createApp({
+            data() {
+                return {
+                    drones: [],
+                    showModal: false,
+                    editForm: {
+                        id: null,
+                        serialNumber: '',
+                        model: '',
+                        weight: '',
+                        maxHeight: '',
+                        maxSpeed: '',
+                        batteryCapacity: '',
+                        status: 'ACTIVE'
+                    },
+                    searchForm: {
+                        serialNumber: '',
+                        model: '',
+                        status: ''
+                    }
+                };
+            },
+            mounted() {
+                this.loadDrones();
+            },
+            methods: {
+                loadDrones() {
+                    axios.get('/api/drone/list', {
+                        params: this.searchForm
+                    }).then(res => {
+                        if (res.data.code === 200) {
+                            this.drones = res.data.data;
+                        }
+                    }).catch(err => {
+                        console.error(err);
+                    });
+                },
+                searchDrones() {
+                    this.loadDrones();
+                },
+                resetSearch() {
+                    this.searchForm = {
+                        serialNumber: '',
+                        model: '',
+                        status: ''
+                    };
+                    this.loadDrones();
+                },
+                addDrone() {
+                    this.editForm = {
+                        id: null,
+                        serialNumber: '',
+                        model: '',
+                        weight: '',
+                        maxHeight: '',
+                        maxSpeed: '',
+                        batteryCapacity: '',
+                        status: 'ACTIVE'
+                    };
+                    this.showModal = true;
+                },
+                editDrone(drone) {
+                    this.editForm = {
+                        id: drone.id,
+                        serialNumber: drone.serialNumber,
+                        model: drone.model,
+                        weight: drone.weight,
+                        maxHeight: drone.maxHeight,
+                        maxSpeed: drone.maxSpeed,
+                        batteryCapacity: drone.batteryCapacity,
+                        status: drone.status
+                    };
+                    this.showModal = true;
+                },
+                closeModal() {
+                    this.showModal = false;
+                },
+                saveDrone() {
+                    const method = this.editForm.id ? 'put' : 'post';
+                    const url = '/api/drone';
+                    
+                    axios[method](url, this.editForm).then(res => {
+                        if (res.data.code === 200) {
+                            alert(res.data.message);
+                            this.closeModal();
+                            this.loadDrones();
+                        } else {
+                            alert(res.data.message);
+                        }
+                    }).catch(err => {
+                        console.error(err);
+                        alert('操作失败');
+                    });
+                },
+                deleteDrone(id) {
+                    if (confirm('确定要删除吗？')) {
+                        axios.delete(`/api/drone/${id}`).then(res => {
+                            if (res.data.code === 200) {
+                                alert(res.data.message);
+                                this.loadDrones();
+                            } else {
+                                alert(res.data.message);
+                            }
+                        }).catch(err => {
+                            console.error(err);
+                            alert('删除失败');
+                        });
+                    }
+                },
+                generateDrone() {
+                    axios.get('/api/drone/generate').then(res => {
+                        if (res.data.code === 200) {
+                            this.editForm = res.data.data;
+                            this.editForm.id = null;
+                            this.showModal = true;
+                        }
+                    }).catch(err => {
+                        console.error(err);
+                    });
+                },
+                getStatusClass(status) {
+                    const classes = {
+                        'ACTIVE': 'status-active',
+                        'INACTIVE': 'status-inactive',
+                        'MAINTENANCE': 'status-maintenance'
+                    };
+                    return classes[status] || '';
+                },
+                getStatusText(status) {
+                    const texts = {
+                        'ACTIVE': '运行中',
+                        'INACTIVE': '未激活',
+                        'MAINTENANCE': '维护中'
+                    };
+                    return texts[status] || status;
+                },
+                formatTime(time) {
+                    if (!time) return '';
+                    return time.replace('T', ' ').substring(0, 19);
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
